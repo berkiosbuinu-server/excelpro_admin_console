@@ -144,7 +144,7 @@ function OrderDetail({ order: o, onClose }: { order: Order; onClose: () => void 
       )}
       {a?.runtime && <RuntimeBlock r={a.runtime} />}
       {a?.warnings?.map((w) => <p className="warnline" key={w}>⚠ {w}</p>)}
-      {o.check_report && <><h3>Rapport de vérification</h3><p>{o.check_report.summary}</p><small>{o.check_report.tested_on}</small></>}
+      {o.check_report && <><h3>Rapport final des experts</h3><p>{o.check_report.summary}</p><small>{o.check_report.tested_on}</small></>}
       {o.deliveries.length > 0 && <><h3>Livrables</h3>{o.deliveries.map((d) => <div className="line static" key={d.id}><span>{PLATFORMS[d.platform] ?? d.platform} — {d.filename}</span></div>)}</>}
       <h3>Paiements</h3>
       {o.payments.length === 0 && <small>Aucun paiement.</small>}
@@ -369,7 +369,7 @@ export function Reports({ data }: { data: Data }) {
   return (
     <>
       <h1>Rapports</h1>
-      <p className="muted">Dès que les frais de vérification sont payés, le vérificateur automatique ouvre le fichier sans Excel, recalcule les formules et produit ce rapport. Ouvrez le PDF, comparez-le à vos propres tests, puis remettez votre rapport au client.</p>
+      <p className="muted">Le rapport automatique est destiné au client dès le paiement des frais. Ici, l'équipe consulte cette analyse, réalise ses propres tests, puis rédige et envoie séparément le rapport final d'expertise.</p>
       {err && <p className="error" role="alert">{err}</p>}
       {rows === null && !err && <p className="muted">Chargement…</p>}
       {rows?.length === 0 && <Empty>Aucun rapport : aucune vérification n'a encore été payée.</Empty>}
@@ -397,18 +397,68 @@ export function Reports({ data }: { data: Data }) {
               </div>
               <div className="compare">
                 <div><small>Vérificateur automatique</small><br /><strong>{r.level_label ?? "—"}</strong></div>
-                <div><small>Votre rapport</small><br /><strong>{r.expert_verdict ? VERDICT[r.expert_verdict] ?? r.expert_verdict : "Pas encore rédigé"}</strong></div>
+                <div><small>Rapport final des experts</small><br /><strong>{r.expert_verdict ? VERDICT[r.expert_verdict] ?? r.expert_verdict : "Pas encore rédigé"}</strong></div>
                 {cmp && <Pill kind={cmp[1]}>{cmp[0]}</Pill>}
               </div>
               <div className="actions">
-                <button className="btn primary" disabled={busy === r.order_id} onClick={() => open(r.order_id)}>{busy === r.order_id ? "Ouverture…" : "Ouvrir le PDF"}</button>
-                <button className="btn" disabled={busy === r.order_id} onClick={() => download(r.order_id)}>Télécharger</button>
-                <button className="btn" disabled={busy === r.order_id} onClick={() => open(r.order_id, true)} title="Relancer le vérificateur sur le fichier">Relancer</button>
+                <button className="btn primary" disabled={busy === r.order_id} onClick={() => open(r.order_id)}>{busy === r.order_id ? "Ouverture…" : "Ouvrir le rapport automatique"}</button>
+                <button className="btn" disabled={busy === r.order_id} onClick={() => download(r.order_id)}>Télécharger PDF</button>
+                <button className="btn" disabled={busy === r.order_id} onClick={() => open(r.order_id, true)} title="Relancer le vérificateur sur le fichier">Relancer l'analyse</button>
               </div>
+              <ExpertReportEditor row={r} onSent={() => { load(); data.reload(); }} />
             </div>
           );
         })}
       </div>
     </>
+  );
+}
+
+
+function ExpertReportEditor({ row, onSent }: { row: ReportRow; onSent: () => void }) {
+  const [verdict, setVerdict] = useState(row.expert_verdict ?? "convertible");
+  const [testedOn, setTestedOn] = useState("");
+  const [summary, setSummary] = useState(row.expert_summary ?? "");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
+  const canSend = ["checking", "report_ready"].includes(row.order_status);
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!summary.trim()) { setError("Rédigez les observations de l'expert avant l'envoi."); return; }
+    setBusy(true); setError(""); setSuccess("");
+    try {
+      await api.submitExpertReport(row.order_id, {
+        verdict, summary: summary.trim(), tested_on: testedOn.trim(),
+        items: [{ category: "autre", name: "Tests et observations de l'expert", status: "partial", details: summary.trim() }],
+      });
+      setSuccess("Rapport final envoyé au client.");
+      onSent();
+    } catch (e) { setError(errMsg(e)); }
+    finally { setBusy(false); }
+  };
+  return (
+    <details className="expert-editor">
+      <summary><strong>{row.expert_verdict ? "Modifier le rapport final des experts" : "Rédiger le rapport final des experts"}</strong></summary>
+      {!canSend && <p className="muted">La rédaction est disponible lorsque les frais de vérification sont payés et avant le paiement de la conversion.</p>}
+      <form onSubmit={submit}>
+        <label>Verdict de l'expert
+          <select value={verdict} onChange={(e) => setVerdict(e.target.value)} disabled={!canSend || busy}>
+            <option value="convertible">Convertible en l'état</option>
+            <option value="convertible_with_changes">Convertible après adaptations</option>
+            <option value="not_convertible">Non convertible en l'état</option>
+          </select>
+        </label>
+        <label>Environnement de test
+          <input value={testedOn} onChange={(e) => setTestedOn(e.target.value)} placeholder="Ex. Excel 365 / Windows 11" maxLength={200} disabled={!canSend || busy} />
+        </label>
+        <label>Rapport et observations de l'expert
+          <textarea rows={6} value={summary} onChange={(e) => setSummary(e.target.value)} maxLength={4000} placeholder="Décrivez les tests réellement effectués, les résultats, les anomalies constatées et les recommandations…" disabled={!canSend || busy} />
+        </label>
+        {error && <p className="error">{error}</p>}
+        {success && <p className="success">{success}</p>}
+        <button className="btn primary" type="submit" disabled={!canSend || busy}>{busy ? "Envoi…" : "Envoyer le rapport final au client"}</button>
+      </form>
+    </details>
   );
 }

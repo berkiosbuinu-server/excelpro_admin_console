@@ -1,4 +1,4 @@
-const BASE: string = import.meta.env.VITE_API_URL ?? "http://localhost:8000";
+const BASE: string = import.meta.env.VITE_API_URL ?? "https://excelpro-api.berkios.online";
 const KEY = "excelpro_admin_token";
 
 export type Payment = {
@@ -72,6 +72,8 @@ export const api = {
   markRead: (userId: number) => json<{ ok: boolean }>(`/admin/messages/${userId}/read`, { method: "POST" }),
   decide: (paymentId: number, action: "confirm" | "reject") => json<Order>(`/admin/payments/${paymentId}/${action}`, { method: "POST" }),
   reports: () => json<ReportRow[]>("/admin/reports"),
+  submitExpertReport: (orderId: number, body: { verdict: string; summary: string; tested_on: string; items: { category: string; name: string; status: string; details: string }[] }) =>
+    json<Order>(`/admin/orders/${orderId}/check-report`, { method: "POST", body: JSON.stringify(body) }),
   reportPdf: async (orderId: number, regenerate = false) => (await raw(`/admin/orders/${orderId}/auto-report.pdf${regenerate ? "?regenerate=true" : ""}`)).blob(),
   proofBlob: async (paymentId: number) => (await raw(`/admin/payments/${paymentId}/proof`)).blob(),
   sourceBlob: async (orderId: number) => (await raw(`/admin/orders/${orderId}/source`)).blob(),
