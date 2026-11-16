@@ -1,4 +1,8 @@
-const BASE: string = import.meta.env.VITE_API_URL ?? "https://excelpro-api.berkios.online";
+const BASE: string = (
+  import.meta.env.VITE_API_URL ||
+  "https://excelpro-api.berkios.online"
+).replace(/\/+$/, "");
+
 const KEY = "excelpro_admin_token";
 
 export type Payment = {
