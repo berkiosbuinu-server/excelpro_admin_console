@@ -131,7 +131,7 @@ function OrderDetail({ order: o, onClose }: { order: Order; onClose: () => void 
         <div><dt>Conversion</dt><dd>{o.total_usd} $ — {o.paid ? "payée" : "non payée"}</dd></div>
         <div><dt>Vérification</dt><dd>{money(o.check_fee_cents)} — {o.check_paid ? "payée" : "à payer"}</dd></div>
         <div><dt>Reçue le</dt><dd>{fmtDate(o.created_at)}</dd></div>
-        {o.claim_key && <div><dt>Clé de récupération</dt><dd><code>{o.claim_key}</code></dd></div>}
+        {o.claim_key && <div><dt>Clé de récupération</dt><dd><code>{o.claim_key}</code>{o.claim_expires_at ? ` · retrait jusqu’au ${fmtDate(o.claim_expires_at)}` : " · délai non démarré"}</dd></div>}
       </dl>
       <h3>Fichier Excel</h3>
       <div className="line static"><span>{o.original_filename}<br /><small>{fmtSize(a?.file_size_bytes)}</small></span><button className="btn" onClick={download}>Télécharger</button></div>

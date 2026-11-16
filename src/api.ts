@@ -1,8 +1,4 @@
-const BASE: string = (
-  import.meta.env.VITE_API_URL ||
-  "https://excelpro-api.berkios.online"
-).replace(/\/+$/, "");
-
+const BASE: string = import.meta.env.VITE_API_URL ?? "https://excelpro-api.berkios.online";
 const KEY = "excelpro_admin_token";
 
 export type Payment = {
@@ -25,7 +21,7 @@ export type RuntimeReport = {
 export type Order = {
   id: number; app_name: string; original_filename: string; platforms: string[]; total_usd: number;
   status: "submitted" | "checking" | "report_ready" | "in_progress" | "ready"; paid: boolean; created_at: string;
-  analysis: Analysis | null; claim_key: string | null; user_email: string | null; deliveries: Delivery[];
+  analysis: Analysis | null; claim_key: string | null; claim_expires_at: string | null; user_email: string | null; deliveries: Delivery[];
   payments: Payment[]; check_fee_cents: number; check_paid: boolean;
   check_report: { verdict: string; summary: string; tested_on: string } | null;
 };
