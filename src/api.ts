@@ -34,6 +34,13 @@ export type ReportRow = {
 export type Message = { id: number; from_admin: boolean; body: string; created_at: string };
 export type Conversation = { user_id: number | null; email: string; name: string | null; unread: number; last_at: string; messages: Message[] };
 
+export type QuotaItem = { used: number | null; limit: number | null; percent: number | null; level: "ok" | "warn" | "full" };
+export type QuotaRow = {
+  user_id: number; email: string; role: string; tenant: string; has_workbooks: boolean; plan: string | null; unlimited: boolean;
+  overrides: Record<string, number | null>; limits: Record<string, number | null> | null;
+  usage: Record<"workbooks" | "rows" | "calls" | "keys" | "queries", QuotaItem> | null;
+};
+
 let token: string | null = null;
 try { token = localStorage.getItem(KEY); } catch { /* stockage indisponible */ }
 export const hasToken = () => token !== null;
@@ -67,6 +74,9 @@ export const api = {
     setToken(r.token);
   },
   orders: () => json<Order[]>("/admin/orders"),
+  quotas: () => json<QuotaRow[]>("/admin/hosting/quotas"),
+  setQuota: (userId: number, plan: string, overrides: Record<string, number | null>) => json<unknown>(`/admin/hosting/quotas/${userId}`, { method: "PUT", body: JSON.stringify({ plan, overrides }) }),
+  removeQuota: (userId: number) => json<unknown>(`/admin/hosting/quotas/${userId}`, { method: "DELETE" }),
   conversations: () => json<Conversation[]>("/admin/messages"),
   reply: (userId: number, body: string) => json<Message>(`/admin/messages/${userId}`, { method: "POST", body: JSON.stringify({ body }) }),
   markRead: (userId: number) => json<{ ok: boolean }>(`/admin/messages/${userId}/read`, { method: "POST" }),

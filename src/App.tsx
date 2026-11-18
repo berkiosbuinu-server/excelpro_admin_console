@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useState } from "react";
 import { api, ApiError, errMsg, hasToken, setToken, type Conversation, type Order } from "./api";
 import { Dashboard, Files, Messages, Orders, Payments, Reports, type Data } from "./pages";
+import { HostingQuotas } from "./hosting";
 
 const NAV: [string, string, string][] = [
   ["dashboard", "Tableau de bord", "▦"], ["orders", "Commandes", "☰"], ["files", "Fichiers", "📁"],
-  ["payments", "Paiements", "＄"], ["reports", "Rapports", "📄"], ["messages", "Messages", "✉"],
+  ["payments", "Paiements", "＄"], ["hosting", "Hébergement", "☁"], ["reports", "Rapports", "📄"], ["messages", "Messages", "✉"],
 ];
 const route = () => (window.location.hash.replace(/^#\/?/, "") || "dashboard");
 
@@ -72,6 +73,7 @@ export default function App() {
             {page === "files" && <Files data={data} />}
             {page === "payments" && <Payments data={data} />}
             {page === "reports" && <Reports data={data} />}
+            {page === "hosting" && <HostingQuotas />}
             {page === "messages" && <Messages data={data} />}
             {!NAV.some(([k]) => k === page) && <Dashboard data={data} go={go} />}
           </>
