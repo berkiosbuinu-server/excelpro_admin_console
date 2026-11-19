@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { api, ApiError, errMsg, hasToken, setToken, type Conversation, type Order } from "./api";
 import { Dashboard, Files, Messages, Orders, Payments, Reports, type Data } from "./pages";
-import { HostingQuotas } from "./hosting";
+import { HostingQuotas, PageGuard } from "./hosting";
 import { StudioPage } from "./studio";
 
 const NAV: [string, string, string][] = [
@@ -74,7 +74,7 @@ export default function App() {
             {page === "files" && <Files data={data} />}
             {page === "payments" && <Payments data={data} />}
             {page === "reports" && <Reports data={data} />}
-            {page === "hosting" && <HostingQuotas />}
+            {page === "hosting" && <PageGuard><HostingQuotas /></PageGuard>}
             {page === "studio" && <StudioPage />}
             {page === "messages" && <Messages data={data} />}
             {!NAV.some(([k]) => k === page) && <Dashboard data={data} go={go} />}

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Component, useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { api, errMsg, money, type QuotaItem, type QuotaRow, type SubRequest } from "./api";
 import { Empty, Modal, Pill } from "./ui";
 
@@ -15,6 +15,13 @@ const BILLING_LABEL: Record<string, string> = { monthly: "Mensuel", quarterly: "
 const ACCESS_LABEL: Record<string, [string, string]> = { none: ["Aucune offre", "info"], trial: ["Essai", "warn"], active: ["Actif", "ok"], expired: ["Expiré", "bad"] };
 const nf = (n: number | null) => (n === null ? "illimité" : n.toLocaleString("fr-FR"));
 const levelKind = (l: string) => (l === "full" ? "bad" : l === "warn" ? "warn" : "ok");
+
+/** Complète une ligne reçue (ancien serveur, compte sans classeur…) pour que l'affichage ne plante jamais. */
+function clean(r: QuotaRow): QuotaRow {
+  const access = { state: "none" as const, expiresAt: null, daysLeft: null, trial: false, ...(r.access ?? {}) };
+  if (!ACCESS_LABEL[access.state]) (access as { state: string }).state = "none";
+  return { ...r, access, overrides: r.overrides ?? {}, source: r.source ?? null, email: r.email ?? "", usage: r.usage ?? null };
+}
 
 function Bar({ label, u }: { label: string; u: QuotaItem }) {
   const pct = Math.min(100, u.percent ?? 0), color = u.level === "full" ? "var(--bad)" : u.level === "warn" ? "var(--warn)" : "var(--ok)";
@@ -81,7 +88,7 @@ export function HostingQuotas() {
   const [err, setErr] = useState(""); const [q, setQ] = useState(""); const [only, setOnly] = useState<"all" | "plan" | "alert">("all");
   const [edit, setEdit] = useState<QuotaRow | null>(null);
   const [reqs, setReqs] = useState<SubRequest[]>([]); const [busyReq, setBusyReq] = useState<number | null>(null);
-  const load = useCallback(async () => { try { setErr(""); const [r, q2] = await Promise.all([api.quotas(), api.requests()]); setRows(r); setReqs(q2); } catch (e) { setErr(errMsg(e)); } }, []);
+  const load = useCallback(async () => { try { setErr(""); const [r, q2] = await Promise.all([api.quotas(), api.requests()]); setRows(r.map(clean)); setReqs(Array.isArray(q2) ? q2 : []); } catch (e) { setErr(errMsg(e)); } }, []);
   const decide = async (r: SubRequest, action: "approve" | "reject") => {
     const msg = action === "approve" ? `ACTIVER « ${r.plan} » (${BILLING_LABEL[r.billing] ?? r.billing}) pour ${r.email} ?\nVérifiez d'abord que ${money(r.amountCents)} a bien été reçu${r.reference ? ` (référence ${r.reference})` : ""}.` : `REJETER la demande de ${r.email} ?`;
     if (!window.confirm(msg)) return;
@@ -118,10 +125,10 @@ export function HostingQuotas() {
       <div className="pay-grid">
         {shown.map((r) => (
           <article className="card pay" key={r.user_id}>
-            <header><strong>{r.email}</strong>{r.plan && r.access.state !== "active" ? <Pill kind={ACCESS_LABEL[r.access.state][1]}>{ACCESS_LABEL[r.access.state][0]}{r.access.daysLeft !== null && r.access.state === "trial" ? ` · ${r.access.daysLeft} j` : ""}</Pill> : r.plan ? <Pill kind={r.usage && Object.values(r.usage).some((u) => u.level === "full") ? "bad" : r.usage && Object.values(r.usage).some((u) => u.level === "warn") ? "warn" : "ok"}>{PLANS[r.plan]?.label.split(" (")[0] ?? r.plan}</Pill> : <Pill kind="info">Illimité</Pill>}</header>
+            <header><strong>{r.email}</strong>{r.plan && r.access.state !== "active" ? <Pill kind={ACCESS_LABEL[r.access.state][1]}>{ACCESS_LABEL[r.access.state][0]}{r.access.daysLeft !== null && r.access.state === "trial" ? ` · ${r.access.daysLeft} j` : ""}</Pill> : r.plan ? <Pill kind={r.usage && Object.values(r.usage).some((u) => u.level === "full") ? "bad" : r.usage && Object.values(r.usage).some((u) => u.level === "warn") ? "warn" : "ok"}>{(PLANS[r.plan]?.label ?? r.plan).split(" (")[0]}</Pill> : <Pill kind="info">Illimité</Pill>}</header>
             <p className="muted" style={{ margin: "4px 0 8px" }}><code>{r.tenant}</code>{r.has_workbooks ? "" : " · aucun classeur"}{r.access.expiresAt ? ` · échéance ${r.access.expiresAt.slice(0, 10)}${r.access.daysLeft !== null ? ` (${r.access.daysLeft} j)` : ""}` : ""}{r.source === "grandfathered" ? " · ancien client (30 j offerts)" : ""}</p>
-            {r.usage && KEYS.map(([k, l]) => <Bar key={k} label={l} u={r.usage![k as keyof typeof r.usage]} />)}
-            {r.usage && r.usage.rows.used === null && <p className="muted" style={{ fontSize: 12 }}>Le nombre de lignes s'affiche après la première opération de ce compte.</p>}
+            {r.usage && KEYS.map(([k, l]) => r.usage![k as keyof typeof r.usage] ? <Bar key={k} label={l} u={r.usage![k as keyof typeof r.usage]} /> : null)}
+            {r.usage && r.usage.rows && r.usage.rows.used === null && <p className="muted" style={{ fontSize: 12 }}>Le nombre de lignes s'affiche après la première opération de ce compte.</p>}
             <div className="actions"><button className="btn primary" onClick={() => setEdit(r)}>{r.plan ? "Changer l'offre" : "Attribuer une offre"}</button></div>
           </article>
         ))}
@@ -129,4 +136,20 @@ export function HostingQuotas() {
       {edit && <Editor row={edit} onClose={() => setEdit(null)} onSaved={load} />}
     </>
   );
+}
+
+/** Filet de sécurité : une erreur d'affichage montre un message et un bouton, au lieu d'une page blanche. */
+export class PageGuard extends Component<{ children: ReactNode }, { error: string }> {
+  state = { error: "" };
+  static getDerivedStateFromError(e: unknown) { return { error: e instanceof Error ? e.message : String(e) }; }
+  render() {
+    if (!this.state.error) return this.props.children;
+    return (
+      <div className="card">
+        <strong>Cette page a rencontré une erreur.</strong>
+        <p className="error" role="alert">{this.state.error}</p>
+        <button className="btn primary" onClick={() => this.setState({ error: "" })}>Réessayer</button>
+      </div>
+    );
+  }
 }
