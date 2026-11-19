@@ -35,7 +35,10 @@ export type Message = { id: number; from_admin: boolean; body: string; created_a
 export type Conversation = { user_id: number | null; email: string; name: string | null; unread: number; last_at: string; messages: Message[] };
 
 export type QuotaItem = { used: number | null; limit: number | null; percent: number | null; level: "ok" | "warn" | "full" };
+export type Access = { state: "none" | "trial" | "active" | "expired"; expiresAt: string | null; daysLeft: number | null; trial: boolean };
+export type SubRequest = { id: number; tenant: string; email: string; plan: string; billing: string; months: number; amountCents: number; reference: string | null; phone: string | null; createdAt: string };
 export type QuotaRow = {
+  access: Access; source: string | null;
   user_id: number; email: string; role: string; tenant: string; has_workbooks: boolean; plan: string | null; unlimited: boolean;
   overrides: Record<string, number | null>; limits: Record<string, number | null> | null;
   usage: Record<"workbooks" | "rows" | "calls" | "keys" | "queries", QuotaItem> | null;
@@ -75,7 +78,9 @@ export const api = {
   },
   orders: () => json<Order[]>("/admin/orders"),
   quotas: () => json<QuotaRow[]>("/admin/hosting/quotas"),
-  setQuota: (userId: number, plan: string, overrides: Record<string, number | null>) => json<unknown>(`/admin/hosting/quotas/${userId}`, { method: "PUT", body: JSON.stringify({ plan, overrides }) }),
+  setQuota: (userId: number, plan: string, overrides: Record<string, number | null>, expiresAt: string) => json<unknown>(`/admin/hosting/quotas/${userId}`, { method: "PUT", body: JSON.stringify({ plan, overrides, expires_at: expiresAt || null }) }),
+  requests: () => json<SubRequest[]>("/admin/hosting/requests"),
+  decideRequest: (id: number, action: "approve" | "reject") => json<unknown>(`/admin/hosting/requests/${id}/${action}`, { method: "POST" }),
   removeQuota: (userId: number) => json<unknown>(`/admin/hosting/quotas/${userId}`, { method: "DELETE" }),
   conversations: () => json<Conversation[]>("/admin/messages"),
   reply: (userId: number, body: string) => json<Message>(`/admin/messages/${userId}`, { method: "POST", body: JSON.stringify({ body }) }),

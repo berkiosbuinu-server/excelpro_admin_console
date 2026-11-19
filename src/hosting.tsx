@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { api, errMsg, type QuotaItem, type QuotaRow } from "./api";
+import { api, errMsg, money, type QuotaItem, type QuotaRow, type SubRequest } from "./api";
 import { Empty, Modal, Pill } from "./ui";
 
 /** Offres d'hébergement (mêmes limites que le serveur et que la page de tarifs). null = illimité. */
@@ -11,6 +11,8 @@ const PLANS: Record<string, { label: string; limits: Record<string, number | nul
   custom: { label: "Sur mesure", limits: {} },
 };
 const KEYS: [string, string][] = [["workbooks", "Classeurs"], ["rows", "Lignes"], ["calls", "Appels / mois"], ["keys", "Clés d'API"], ["queries", "Requêtes et actions"]];
+const BILLING_LABEL: Record<string, string> = { monthly: "Mensuel", quarterly: "3 mois + 1 offert (4 mois)", yearly: "Annuel (−30 %)" };
+const ACCESS_LABEL: Record<string, [string, string]> = { none: ["Aucune offre", "info"], trial: ["Essai", "warn"], active: ["Actif", "ok"], expired: ["Expiré", "bad"] };
 const nf = (n: number | null) => (n === null ? "illimité" : n.toLocaleString("fr-FR"));
 const levelKind = (l: string) => (l === "full" ? "bad" : l === "warn" ? "warn" : "ok");
 
@@ -27,6 +29,7 @@ function Bar({ label, u }: { label: string; u: QuotaItem }) {
 function Editor({ row, onClose, onSaved }: { row: QuotaRow; onClose: () => void; onSaved: () => Promise<void> }) {
   const [plan, setPlan] = useState(row.plan ?? "solo");
   const [ov, setOv] = useState<Record<string, string>>(() => Object.fromEntries(Object.entries(row.overrides).map(([k, v]) => [k, v === null ? "" : String(v)])));
+  const [expiry, setExpiry] = useState(row.access.expiresAt ? row.access.expiresAt.slice(0, 10) : "");
   const [err, setErr] = useState(""); const [busy, setBusy] = useState(false);
   const defaults = PLANS[plan]?.limits ?? {};
   const save = async () => {
@@ -39,7 +42,8 @@ function Editor({ row, onClose, onSaved }: { row: QuotaRow; onClose: () => void;
         const n = Number(t); if (!Number.isInteger(n) || n < 0) throw new Error(`« ${k} » : entier positif attendu (laissez vide pour la valeur de l'offre).`);
         overrides[k] = n;
       }
-      await api.setQuota(row.user_id, plan, overrides); await onSaved(); onClose();
+      if (expiry && !/^\d{4}-\d{2}-\d{2}$/.test(expiry)) throw new Error("Date d'échéance : AAAA-MM-JJ (ou vide = sans échéance).");
+      await api.setQuota(row.user_id, plan, overrides, expiry); await onSaved(); onClose();
     } catch (e) { setErr(errMsg(e)); setBusy(false); }
   };
   const remove = async () => {
@@ -51,6 +55,8 @@ function Editor({ row, onClose, onSaved }: { row: QuotaRow; onClose: () => void;
       <label>Offre
         <select value={plan} onChange={(e) => setPlan(e.target.value)}>{Object.entries(PLANS).map(([k, p]) => <option key={k} value={k}>{p.label}</option>)}</select>
       </label>
+      <label>Valable jusqu'au <input type="date" value={expiry} onChange={(e) => setExpiry(e.target.value)} /></label>
+      <p className="muted">Vide = sans échéance. À l'échéance, l'offre passe en lecture seule jusqu'au renouvellement.</p>
       <p className="muted">Limites : laissez une case vide pour appliquer la valeur de l'offre. Pour « Sur mesure », une case vide = illimité.</p>
       <table style={{ width: "100%", borderCollapse: "collapse" }}>
         <thead><tr><th style={{ textAlign: "left" }}>Limite</th><th style={{ textAlign: "left" }}>Offre</th><th style={{ textAlign: "left" }}>Valeur imposée</th></tr></thead>
@@ -74,7 +80,13 @@ export function HostingQuotas() {
   const [rows, setRows] = useState<QuotaRow[] | null>(null);
   const [err, setErr] = useState(""); const [q, setQ] = useState(""); const [only, setOnly] = useState<"all" | "plan" | "alert">("all");
   const [edit, setEdit] = useState<QuotaRow | null>(null);
-  const load = useCallback(async () => { try { setErr(""); setRows(await api.quotas()); } catch (e) { setErr(errMsg(e)); } }, []);
+  const [reqs, setReqs] = useState<SubRequest[]>([]); const [busyReq, setBusyReq] = useState<number | null>(null);
+  const load = useCallback(async () => { try { setErr(""); const [r, q2] = await Promise.all([api.quotas(), api.requests()]); setRows(r); setReqs(q2); } catch (e) { setErr(errMsg(e)); } }, []);
+  const decide = async (r: SubRequest, action: "approve" | "reject") => {
+    const msg = action === "approve" ? `ACTIVER « ${r.plan} » (${BILLING_LABEL[r.billing] ?? r.billing}) pour ${r.email} ?\nVérifiez d'abord que ${money(r.amountCents)} a bien été reçu${r.reference ? ` (référence ${r.reference})` : ""}.` : `REJETER la demande de ${r.email} ?`;
+    if (!window.confirm(msg)) return;
+    setBusyReq(r.id); try { await api.decideRequest(r.id, action); await load(); } catch (e) { setErr(errMsg(e)); } setBusyReq(null);
+  };
   useEffect(() => { void load(); }, [load]);
   const shown = useMemo(() => (rows ?? []).filter((r) => r.email.toLowerCase().includes(q.trim().toLowerCase()) &&
     (only === "all" || (only === "plan" ? r.plan !== null : r.usage !== null && Object.values(r.usage).some((u) => u.level !== "ok")))), [rows, q, only]);
@@ -88,13 +100,26 @@ export function HostingQuotas() {
         <button className="btn" onClick={() => void load()}>Actualiser</button>
       </div>
       {err && <p className="error" role="alert">{err}</p>}
+      {reqs.length > 0 && (
+        <div className="card" style={{ marginBottom: 14 }}>
+          <strong>Demandes d'abonnement à valider ({reqs.length})</strong>
+          <p className="muted">Le client a demandé une offre et indiqué sa référence de paiement. Vérifiez la réception du paiement, puis activez.</p>
+          {reqs.map((r) => (
+            <div key={r.id} style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center", padding: "8px 0", borderTop: "1px solid var(--line)" }}>
+              <span style={{ flex: 1, minWidth: 220 }}><b>{r.email}</b><br /><span className="muted">{PLANS[r.plan]?.label ?? r.plan} · {BILLING_LABEL[r.billing] ?? r.billing} · <b>{money(r.amountCents)}</b>{r.reference ? ` · réf. ${r.reference}` : ""}{r.phone ? ` · ${r.phone}` : ""}</span></span>
+              <button className="btn primary" disabled={busyReq === r.id} onClick={() => void decide(r, "approve")}>Paiement reçu : activer</button>
+              <button className="btn danger" disabled={busyReq === r.id} onClick={() => void decide(r, "reject")}>Rejeter</button>
+            </div>
+          ))}
+        </div>
+      )}
       {rows === null && !err && <p className="muted">Chargement…</p>}
       {rows !== null && shown.length === 0 && <Empty>Aucun compte dans cette catégorie.</Empty>}
       <div className="pay-grid">
         {shown.map((r) => (
           <article className="card pay" key={r.user_id}>
-            <header><strong>{r.email}</strong>{r.plan ? <Pill kind={r.usage && Object.values(r.usage).some((u) => u.level === "full") ? "bad" : r.usage && Object.values(r.usage).some((u) => u.level === "warn") ? "warn" : "ok"}>{PLANS[r.plan]?.label.split(" (")[0] ?? r.plan}</Pill> : <Pill kind="info">Illimité</Pill>}</header>
-            <p className="muted" style={{ margin: "4px 0 8px" }}><code>{r.tenant}</code>{r.has_workbooks ? "" : " · aucun classeur"}</p>
+            <header><strong>{r.email}</strong>{r.plan && r.access.state !== "active" ? <Pill kind={ACCESS_LABEL[r.access.state][1]}>{ACCESS_LABEL[r.access.state][0]}{r.access.daysLeft !== null && r.access.state === "trial" ? ` · ${r.access.daysLeft} j` : ""}</Pill> : r.plan ? <Pill kind={r.usage && Object.values(r.usage).some((u) => u.level === "full") ? "bad" : r.usage && Object.values(r.usage).some((u) => u.level === "warn") ? "warn" : "ok"}>{PLANS[r.plan]?.label.split(" (")[0] ?? r.plan}</Pill> : <Pill kind="info">Illimité</Pill>}</header>
+            <p className="muted" style={{ margin: "4px 0 8px" }}><code>{r.tenant}</code>{r.has_workbooks ? "" : " · aucun classeur"}{r.access.expiresAt ? ` · échéance ${r.access.expiresAt.slice(0, 10)}${r.access.daysLeft !== null ? ` (${r.access.daysLeft} j)` : ""}` : ""}{r.source === "grandfathered" ? " · ancien client (30 j offerts)" : ""}</p>
             {r.usage && KEYS.map(([k, l]) => <Bar key={k} label={l} u={r.usage![k as keyof typeof r.usage]} />)}
             {r.usage && r.usage.rows.used === null && <p className="muted" style={{ fontSize: 12 }}>Le nombre de lignes s'affiche après la première opération de ce compte.</p>}
             <div className="actions"><button className="btn primary" onClick={() => setEdit(r)}>{r.plan ? "Changer l'offre" : "Attribuer une offre"}</button></div>
