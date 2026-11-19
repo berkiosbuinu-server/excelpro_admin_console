@@ -44,6 +44,19 @@ export type QuotaRow = {
   usage: Record<"workbooks" | "rows" | "calls" | "keys" | "queries", QuotaItem> | null;
 };
 
+export type StudioInstall = {
+  id: number; user_email: string; machine_id: string; machine_name: string | null; platform: string | null;
+  studio_version: string; bridge_version: string | null; bridge_ok: boolean; features: string[];
+  first_seen: string; last_seen: string; online: boolean; ready: boolean; age_seconds: number | null; issues: string[];
+};
+export type StudioRelease = { id: number; version: string; platform: string; filename: string; sha256: string; size_bytes: number; notes: string | null; created_at: string };
+export type StudioStatus = {
+  required: boolean; ready: boolean; online: number; installed: number; latest_release: StudioRelease | null;
+  min_studio_version: string; min_bridge_version: string;
+};
+export type StudioJob = { id: number; order_id: number; app_name: string; filename: string; status: "queued" | "taken" | "done" | "failed"; machine_id: string | null; message: string | null; created_at: string };
+export type OrderStudio = { project: { filename: string; size_bytes: number; revision: number; updated_at: string } | null; jobs: StudioJob[] };
+
 let token: string | null = null;
 try { token = localStorage.getItem(KEY); } catch { /* stockage indisponible */ }
 export const hasToken = () => token !== null;
@@ -92,6 +105,17 @@ export const api = {
   reportPdf: async (orderId: number, regenerate = false) => (await raw(`/admin/orders/${orderId}/auto-report.pdf${regenerate ? "?regenerate=true" : ""}`)).blob(),
   proofBlob: async (paymentId: number) => (await raw(`/admin/payments/${paymentId}/proof`)).blob(),
   sourceBlob: async (orderId: number) => (await raw(`/admin/orders/${orderId}/source`)).blob(),
+  studioStatus: () => json<StudioStatus>("/admin/studio/status"),
+  studioInstalls: () => json<StudioInstall[]>("/admin/studio/installs"),
+  forgetStudio: (id: number) => raw(`/admin/studio/installs/${id}`, { method: "DELETE" }),
+  studioReleases: () => json<StudioRelease[]>("/admin/studio/releases"),
+  addStudioRelease: (version: string, notes: string, file: File) => {
+    const f = new FormData(); f.set("version", version); f.set("notes", notes); f.set("platform", "windows"); f.set("file", file);
+    return json<StudioRelease>("/admin/studio/releases", { method: "POST", body: f });
+  },
+  studioReleaseBlob: async (id: number) => (await raw(`/admin/studio/releases/${id}/download`)).blob(),
+  orderStudio: (orderId: number) => json<OrderStudio>(`/admin/orders/${orderId}/studio`),
+  openInStudio: (orderId: number, machineId?: string) => json<StudioJob>(`/admin/orders/${orderId}/studio-job${machineId ? `?machine_id=${encodeURIComponent(machineId)}` : ""}`, { method: "POST" }),
 };
 
 export function saveBlob(blob: Blob, filename: string) {

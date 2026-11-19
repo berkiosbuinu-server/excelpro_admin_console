@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api, errMsg, fmtDate, fmtSize, money, saveBlob, type Analysis, type Conversation, type Order, type Payment, type ReportRow } from "./api";
+import { OrderStudioBlock } from "./studio";
 import { Empty, Modal, PAY_STATUS, PLATFORMS, Pill, PROVIDERS, ProofView, PURPOSE, STATUS } from "./ui";
 
 export type Data = { orders: Order[]; convs: Conversation[]; reload: () => Promise<void> };
@@ -142,6 +143,7 @@ function OrderDetail({ order: o, onClose }: { order: Order; onClose: () => void 
           {(a.vba_forms?.length ?? 0) > 0 && <span className="tag">{a.vba_forms!.length} UserForm(s)</span>}
         </div>
       )}
+      <OrderStudioBlock orderId={o.id} />
       {a?.runtime && <RuntimeBlock r={a.runtime} />}
       {a?.warnings?.map((w) => <p className="warnline" key={w}>⚠ {w}</p>)}
       {o.check_report && <><h3>Rapport final des experts</h3><p>{o.check_report.summary}</p><small>{o.check_report.tested_on}</small></>}
