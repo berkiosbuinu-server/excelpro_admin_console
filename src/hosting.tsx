@@ -7,11 +7,15 @@ const PLANS: Record<string, { label: string; limits: Record<string, number | nul
   solo: { label: "Solo (3 $/mois)", limits: { workbooks: 1, rows: 10_000, calls: 30_000, keys: 2, queries: 10 } },
   equipe: { label: "Équipe (15 $/mois)", limits: { workbooks: 3, rows: 200_000, calls: 500_000, keys: 5, queries: 30 } },
   entreprise: { label: "Entreprise (39 $/mois)", limits: { workbooks: 10, rows: 1_000_000, calls: 3_000_000, keys: 20, queries: 60 } },
-  editeur: { label: "Éditeur SaaS (79 $/mois)", limits: { workbooks: 10, rows: 1_000_000, calls: 3_000_000, keys: 50, queries: 60 } },
+  editeur10: { label: "Éditeur · 1 à 10 clients (30 $/mois)", limits: { workbooks: 10, rows: 300_000, calls: 1_000_000, keys: 50, queries: 60, clients: 10 } },
+  editeur50: { label: "Éditeur · 11 à 50 clients (89 $/mois)", limits: { workbooks: 10, rows: 1_000_000, calls: 3_000_000, keys: 50, queries: 60, clients: 50 } },
+  editeur100: { label: "Éditeur · 51 à 100 clients (149 $/mois)", limits: { workbooks: 10, rows: 2_000_000, calls: 6_000_000, keys: 50, queries: 60, clients: 100 } },
+  editeur500: { label: "Éditeur · 101 à 500 clients (299 $/mois)", limits: { workbooks: 10, rows: 5_000_000, calls: 15_000_000, keys: 50, queries: 60, clients: 500 } },
+  editeur: { label: "Éditeur (ancienne offre, 79 $/mois)", limits: { workbooks: 10, rows: 1_000_000, calls: 3_000_000, keys: 50, queries: 60 } },
   custom: { label: "Sur mesure", limits: {} },
 };
-const KEYS: [string, string][] = [["workbooks", "Classeurs"], ["rows", "Lignes"], ["calls", "Appels / mois"], ["keys", "Clés d'API"], ["queries", "Requêtes et actions"]];
-const BILLING_LABEL: Record<string, string> = { monthly: "Mensuel", quarterly: "3 mois + 1 offert (4 mois)", yearly: "Annuel (−30 %)" };
+const KEYS: [string, string][] = [["workbooks", "Classeurs"], ["rows", "Lignes"], ["calls", "Appels / mois"], ["keys", "Clés d'API"], ["queries", "Requêtes et actions"], ["clients", "Clients finaux (Éditeur)"]];
+const BILLING_LABEL: Record<string, string> = { monthly: "Mensuel", quarterly: "3 mois + 1 offert (4 mois)", yearly: "Annuel (−30 %)", upgrade: "Montée de palier (prorata)" };
 const ACCESS_LABEL: Record<string, [string, string]> = { none: ["Aucune offre", "info"], trial: ["Essai", "warn"], active: ["Actif", "ok"], expired: ["Expiré", "bad"] };
 const nf = (n: number | null) => (n === null ? "illimité" : n.toLocaleString("fr-FR"));
 const levelKind = (l: string) => (l === "full" ? "bad" : l === "warn" ? "warn" : "ok");
