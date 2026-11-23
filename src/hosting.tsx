@@ -16,6 +16,11 @@ const PLANS: Record<string, { label: string; limits: Record<string, number | nul
 };
 const KEYS: [string, string][] = [["workbooks", "Classeurs"], ["rows", "Lignes"], ["calls", "Appels / mois"], ["keys", "Clés d'API"], ["queries", "Requêtes et actions"], ["clients", "Clients finaux (Éditeur)"]];
 const BILLING_LABEL: Record<string, string> = { monthly: "Mensuel", quarterly: "3 mois + 1 offert (4 mois)", yearly: "Annuel (−30 %)", upgrade: "Montée de palier (prorata)" };
+// Hébergement de sites web : ces demandes arrivent dans la même liste (identifiants « s12 », offres site-starter / site-pro).
+const SITE_PLANS: Record<string, string> = { "site-starter": "Site web · Starter (2 $/mois, 1 site)", "site-pro": "Site web · Pro (10 $/mois, 5 sites, domaines)" };
+const SITE_BILLING: Record<string, string> = { monthly: "1 mois", start5: "5 mois (premier paiement Starter)", yearly: "12 mois (−20 %)", upgrade: "Montée Starter → Pro (prorata)" };
+export const requestPlan = (plan: string) => SITE_PLANS[plan] ?? PLANS[plan]?.label ?? plan;
+export const requestBilling = (plan: string, billing: string) => (plan in SITE_PLANS ? SITE_BILLING : BILLING_LABEL)[billing] ?? billing;
 const ACCESS_LABEL: Record<string, [string, string]> = { none: ["Aucune offre", "info"], trial: ["Essai", "warn"], active: ["Actif", "ok"], expired: ["Expiré", "bad"] };
 const nf = (n: number | null) => (n === null ? "illimité" : n.toLocaleString("fr-FR"));
 const levelKind = (l: string) => (l === "full" ? "bad" : l === "warn" ? "warn" : "ok");
@@ -94,7 +99,7 @@ export function HostingQuotas() {
   const [reqs, setReqs] = useState<SubRequest[]>([]); const [busyReq, setBusyReq] = useState<number | null>(null);
   const load = useCallback(async () => { try { setErr(""); const [r, q2] = await Promise.all([api.quotas(), api.requests()]); setRows(r.map(clean)); setReqs(Array.isArray(q2) ? q2 : []); } catch (e) { setErr(errMsg(e)); } }, []);
   const decide = async (r: SubRequest, action: "approve" | "reject") => {
-    const msg = action === "approve" ? `ACTIVER « ${r.plan} » (${BILLING_LABEL[r.billing] ?? r.billing}) pour ${r.email} ?\nVérifiez d'abord que ${money(r.amountCents)} a bien été reçu${r.reference ? ` (référence ${r.reference})` : ""}.` : `REJETER la demande de ${r.email} ?`;
+    const msg = action === "approve" ? `ACTIVER « ${requestPlan(r.plan)} » (${requestBilling(r.plan, r.billing)}) pour ${r.email} ?\nVérifiez d'abord que ${money(r.amountCents)} a bien été reçu${r.reference ? ` (référence ${r.reference})` : ""}.` : `REJETER la demande de ${r.email} ?`;
     if (!window.confirm(msg)) return;
     setBusyReq(r.id); try { await api.decideRequest(r.id, action); await load(); } catch (e) { setErr(errMsg(e)); } setBusyReq(null);
   };
@@ -117,7 +122,7 @@ export function HostingQuotas() {
           <p className="muted">Le client a demandé une offre et indiqué sa référence de paiement. Vérifiez la réception du paiement, puis activez.</p>
           {reqs.map((r) => (
             <div key={r.id} style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center", padding: "8px 0", borderTop: "1px solid var(--line)" }}>
-              <span style={{ flex: 1, minWidth: 220 }}><b>{r.email}</b><br /><span className="muted">{PLANS[r.plan]?.label ?? r.plan} · {BILLING_LABEL[r.billing] ?? r.billing} · <b>{money(r.amountCents)}</b>{r.reference ? ` · réf. ${r.reference}` : ""}{r.phone ? ` · ${r.phone}` : ""}</span></span>
+              <span style={{ flex: 1, minWidth: 220 }}><b>{r.email}</b><br /><span className="muted">{requestPlan(r.plan)} · {requestBilling(r.plan, r.billing)} · <b>{money(r.amountCents)}</b>{r.reference ? ` · réf. ${r.reference}` : ""}{r.phone ? ` · ${r.phone}` : ""}</span></span>
               <button className="btn primary" disabled={busyReq === r.id} onClick={() => void decide(r, "approve")}>Paiement reçu : activer</button>
               <button className="btn danger" disabled={busyReq === r.id} onClick={() => void decide(r, "reject")}>Rejeter</button>
             </div>

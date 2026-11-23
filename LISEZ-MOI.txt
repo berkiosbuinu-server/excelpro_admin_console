@@ -1,0 +1,2 @@
+Copiez src/hosting.tsx dans admin-console/src/ (remplace), puis git add -A, git commit, git push (Vercel).
+Les demandes « Site Starter / Site Pro » (id s12…) affichent un libelle clair, la periode (5 mois, 12 mois -20 %, montee prorata) et le message de confirmation.
