@@ -27,7 +27,7 @@ const levelKind = (l: string) => (l === "full" ? "bad" : l === "warn" ? "warn" :
 
 /** Complète une ligne reçue (ancien serveur, compte sans classeur…) pour que l'affichage ne plante jamais. */
 function clean(r: QuotaRow): QuotaRow {
-  const access = { state: "none" as const, expiresAt: null, daysLeft: null, trial: false, ...(r.access ?? {}) };
+  const access = { ...(r.access ?? {}), state: r.access?.state ?? ("none" as const), expiresAt: r.access?.expiresAt ?? null, daysLeft: r.access?.daysLeft ?? null, trial: r.access?.trial ?? false };
   if (!ACCESS_LABEL[access.state]) (access as { state: string }).state = "none";
   return { ...r, access, overrides: r.overrides ?? {}, source: r.source ?? null, email: r.email ?? "", usage: r.usage ?? null };
 }
