@@ -19,8 +19,14 @@ const BILLING_LABEL: Record<string, string> = { monthly: "Mensuel", quarterly: "
 // Hébergement de sites web : ces demandes arrivent dans la même liste (identifiants « s12 », offres site-starter / site-pro).
 const SITE_PLANS: Record<string, string> = { "site-starter": "Site web · Starter (2 $/mois, 1 site)", "site-pro": "Site web · Pro (10 $/mois, 5 sites, domaines)" };
 const SITE_BILLING: Record<string, string> = { monthly: "1 mois", start5: "5 mois (premier paiement Starter)", yearly: "12 mois (−20 %)", upgrade: "Montée Starter → Pro (prorata)" };
-export const requestPlan = (plan: string) => SITE_PLANS[plan] ?? PLANS[plan]?.label ?? plan;
-export const requestBilling = (plan: string, billing: string) => (plan in SITE_PLANS ? SITE_BILLING : BILLING_LABEL)[billing] ?? billing;
+// AutoBackend (serveurs des applications client-serveur du Studio) : identifiants « b7 », offres team-N (utilisateurs) / saas-N (clients).
+const BACKEND_PLANS: Record<string, string> = {
+  "team-5": "AutoBackend · Équipe 5 utilisateurs (5 $/mois)", "team-25": "AutoBackend · Équipe 25 utilisateurs (15 $/mois)", "team-100": "AutoBackend · Équipe 100 utilisateurs (40 $/mois)", "team-500": "AutoBackend · Équipe 500 utilisateurs (120 $/mois)",
+  "saas-10": "AutoBackend · SaaS 10 clients (15 $/mois)", "saas-50": "AutoBackend · SaaS 50 clients (40 $/mois)", "saas-250": "AutoBackend · SaaS 250 clients (100 $/mois)", "saas-1000": "AutoBackend · SaaS 1000 clients (250 $/mois)",
+};
+const BACKEND_BILLING: Record<string, string> = { monthly: "1 mois", yearly: "12 mois (−20 %)" };
+export const requestPlan = (plan: string) => BACKEND_PLANS[plan] ?? SITE_PLANS[plan] ?? PLANS[plan]?.label ?? plan;
+export const requestBilling = (plan: string, billing: string) => (plan in BACKEND_PLANS ? BACKEND_BILLING : plan in SITE_PLANS ? SITE_BILLING : BILLING_LABEL)[billing] ?? billing;
 const ACCESS_LABEL: Record<string, [string, string]> = { none: ["Aucune offre", "info"], trial: ["Essai", "warn"], active: ["Actif", "ok"], expired: ["Expiré", "bad"] };
 const nf = (n: number | null) => (n === null ? "illimité" : n.toLocaleString("fr-FR"));
 const levelKind = (l: string) => (l === "full" ? "bad" : l === "warn" ? "warn" : "ok");
